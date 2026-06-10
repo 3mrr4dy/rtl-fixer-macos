@@ -611,14 +611,18 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private let sectionLabel = NSTextField(labelWithString: "Translate")
     private let sourceCardLabel = NSTextField(labelWithString: "")
     private let translationCardLabel = NSTextField(labelWithString: "")
-    private let sourceBadgeLabel = NSTextField(labelWithString: "Arabic")
-    private let targetBadgeLabel = NSTextField(labelWithString: "English")
+    private let sourceBadgeLabel = NSTextField(labelWithString: "Text")
+    private let targetBadgeLabel = NSTextField(labelWithString: "Arabic")
     private let cardArrowLabel = NSTextField(labelWithString: "→")
     private let statusButton = NSButton()
     private let speakerButton = NSButton()
     private let footerMenuButton = NSButton()
     private let copyTranslationButton = NSButton()
     private let actionsButton = NSButton()
+    private let cardContainer = NSView()
+    private let sourceColumn = NSStackView()
+    private let targetColumn = NSStackView()
+    private let cardBody = NSStackView()
     private let directionPopup = NSPopUpButton()
     private let stylePopup = NSPopUpButton()
     private let searchField = NSSearchField()
@@ -719,9 +723,9 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         currentSource = source
         addHistory(text)
         titleLabel.stringValue = text
-        metadataLabel.stringValue = "Arabic → English"
+        metadataLabel.stringValue = source
         sourceCardLabel.stringValue = text
-        translationCardLabel.stringValue = "Translating..."
+        translationCardLabel.stringValue = ""
         render(animated: true)
         placeWindowIfNeeded()
         window?.alphaValue = 0
@@ -781,7 +785,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         sectionLabel.font = .systemFont(ofSize: 15, weight: .regular)
         sectionLabel.textColor = NSColor(calibratedWhite: 0.68, alpha: 1)
 
-        let cardContainer = NSView()
         cardContainer.wantsLayer = true
         cardContainer.layer?.backgroundColor = NSColor(calibratedWhite: 0.21, alpha: 1).cgColor
         cardContainer.layer?.cornerRadius = cardCornerRadius
@@ -800,7 +803,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         speakerButton.setAccessibilityLabel("Speak translation")
         speakerButton.contentTintColor = NSColor(calibratedWhite: 0.82, alpha: 1)
 
-        let sourceColumn = NSStackView()
         sourceColumn.orientation = .vertical
         sourceColumn.alignment = .centerX
         sourceColumn.spacing = 20
@@ -826,7 +828,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         sourceColumn.addArrangedSubview(sourceCardLabel)
         sourceColumn.addArrangedSubview(sourceBadgeLabel)
 
-        let targetColumn = NSStackView()
         targetColumn.orientation = .vertical
         targetColumn.alignment = .centerX
         targetColumn.spacing = 20
@@ -856,7 +857,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         cardArrowLabel.alignment = .center
         cardArrowLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        let cardBody = NSStackView()
         cardBody.orientation = .horizontal
         cardBody.alignment = .centerY
         cardBody.spacing = 24
@@ -964,8 +964,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             cardBody.topAnchor.constraint(equalTo: cardContainer.topAnchor),
             cardBody.bottomAnchor.constraint(equalTo: cardContainer.bottomAnchor),
             footerRow.heightAnchor.constraint(equalToConstant: 54),
-            sourceColumn.widthAnchor.constraint(equalTo: cardContainer.widthAnchor, multiplier: 0.43),
-            targetColumn.widthAnchor.constraint(equalTo: cardContainer.widthAnchor, multiplier: 0.43),
             cardArrowLabel.widthAnchor.constraint(equalToConstant: 28),
         ])
 
@@ -1187,9 +1185,19 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         sourceCardLabel.font = .systemFont(ofSize: max(22, fontSize + 9), weight: .semibold)
         translationCardLabel.font = .systemFont(ofSize: max(20, fontSize + 7), weight: .semibold)
         titleLabel.stringValue = currentText
-        metadataLabel.stringValue = "Arabic → English"
+        let showsTranslation = isPrimarilyEnglish(currentText) || translatedText != nil
+        metadataLabel.stringValue = showsTranslation ? "English → Arabic" : currentSource
+        sectionLabel.stringValue = showsTranslation ? "Translate" : "Text"
         sourceCardLabel.stringValue = currentText
-        translationCardLabel.stringValue = translatedText ?? "Translating..."
+        sourceCardLabel.alignment = containsRTL(currentText) ? .right : .left
+        sourceBadgeLabel.stringValue = showsTranslation ? "English" : "Text"
+        targetBadgeLabel.stringValue = "Arabic"
+        translationCardLabel.stringValue = translatedText ?? (showsTranslation ? "Translating..." : "")
+        translationCardLabel.alignment = .right
+        targetColumn.isHidden = !showsTranslation
+        cardArrowLabel.isHidden = !showsTranslation
+        speakerButton.isHidden = !showsTranslation
+        copyTranslationButton.title = showsTranslation ? "Copy Translation" : "Copy Text"
         if animated {
             crossfadeRenderedText(NSAttributedString())
         }
@@ -1290,9 +1298,14 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
         let contentWidth = max(window.frame.width - 32, 680)
         let cardWidth = max(600, contentWidth - 16)
-        let columnWidth = max(260, floor((cardWidth - 28 - 24) / 2))
+        let showsTranslation = isPrimarilyEnglish(currentText) || translatedText != nil
+        let columnWidth = showsTranslation
+            ? max(260, floor((cardWidth - 28 - 24) / 2))
+            : max(320, cardWidth - 72)
         let sourceHeight = measuredTextHeight(currentText, font: .systemFont(ofSize: max(22, fontSize + 9), weight: .semibold), width: columnWidth, alignment: .right)
-        let translationHeight = measuredTextHeight(translatedText ?? "Translating...", font: .systemFont(ofSize: max(20, fontSize + 7), weight: .semibold), width: columnWidth, alignment: .left)
+        let translationHeight = showsTranslation
+            ? measuredTextHeight(translatedText ?? "Translating...", font: .systemFont(ofSize: max(20, fontSize + 7), weight: .semibold), width: columnWidth, alignment: .left)
+            : 0
         let sourceBlockHeight = sourceHeight + 20 + 20
         let targetBlockHeight = translationHeight + 20 + 20
         let cardHeight = max(max(sourceBlockHeight, targetBlockHeight) + 66, 260)
@@ -1470,7 +1483,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let autoTranslate = defaults.object(forKey: "autoTranslateEnglish") == nil
             ? true
             : defaults.bool(forKey: "autoTranslateEnglish")
-        let translationItem = menuItem("Translate Arabic to English", action: #selector(toggleAutomaticTranslation))
+        let translationItem = menuItem("Translate English to Arabic", action: #selector(toggleAutomaticTranslation))
         translationItem.state = autoTranslate ? .on : .off
         menu.addItem(translationItem)
 
@@ -1500,7 +1513,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             translationGeneration = UUID()
             translatedText = nil
             titleLabel.stringValue = currentText
-            metadataLabel.stringValue = "Arabic → English"
+            metadataLabel.stringValue = currentSource
             render()
             resizeForContentIfNeeded()
         } else {
@@ -1512,7 +1525,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let enabled = defaults.object(forKey: "autoTranslateEnglish") == nil
             ? true
             : defaults.bool(forKey: "autoTranslateEnglish")
-        guard enabled, containsArabic(text) else { return }
+        guard enabled, isPrimarilyEnglish(text) else { return }
 
         let generation = translationGeneration
         let translationInput = makeBlocks(from: text)
@@ -1521,18 +1534,19 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let chunks = translationChunks(from: translationInput)
         guard !chunks.isEmpty else { return }
 
-        metadataLabel.stringValue = "Translating to English..."
+        metadataLabel.stringValue = "Translating to Arabic..."
+        render()
         translate(chunks: chunks, index: 0, translations: [], generation: generation)
     }
 
-    private func containsArabic(_ text: String) -> Bool {
-        guard containsRTL(text) else { return false }
+    private func isPrimarilyEnglish(_ text: String) -> Bool {
+        guard !containsRTL(text) else { return false }
         let letters = text.unicodeScalars.filter { CharacterSet.letters.contains($0) }
-        guard letters.count >= 4 else { return false }
+        guard letters.count >= 8 else { return false }
 
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(String(text.prefix(8_000)))
-        return recognizer.dominantLanguage == .arabic || containsRTL(text)
+        return recognizer.dominantLanguage == .english
     }
 
     private func translationChunks(from text: String) -> [String] {
@@ -1606,7 +1620,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         translationRequest?.resume()
     }
 
-    private func translationRequest(for arabicText: String) -> URLRequest {
+    private func translationRequest(for englishText: String) -> URLRequest {
         var request = URLRequest(url: URL(string: "https://translate.googleapis.com/translate_a/single")!)
         request.httpMethod = "POST"
         request.timeoutInterval = 20
@@ -1614,10 +1628,10 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         var components = URLComponents()
         components.queryItems = [
             URLQueryItem(name: "client", value: "gtx"),
-            URLQueryItem(name: "sl", value: "ar"),
-            URLQueryItem(name: "tl", value: "en"),
+            URLQueryItem(name: "sl", value: "en"),
+            URLQueryItem(name: "tl", value: "ar"),
             URLQueryItem(name: "dt", value: "t"),
-            URLQueryItem(name: "q", value: arabicText),
+            URLQueryItem(name: "q", value: englishText),
         ]
         request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
         return request
@@ -1636,7 +1650,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private func showCompletedTranslation(_ translations: [String]) {
         translatedText = translations.joined(separator: "\n\n")
         titleLabel.stringValue = currentText
-        metadataLabel.stringValue = "Arabic → English"
+        metadataLabel.stringValue = "English → Arabic"
         render()
         resizeForContentIfNeeded()
     }
