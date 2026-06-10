@@ -608,8 +608,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private let textView = NSTextView()
     private let titleLabel = NSTextField(labelWithString: "RTL Viewer")
     private let metadataLabel = NSTextField(labelWithString: "")
-    private let sectionLabel = NSTextField(labelWithString: "Translate")
-    private let statusButton = NSButton()
     private let speakerButton = NSButton()
     private let footerMenuButton = NSButton()
     private let copyTranslationButton = NSButton()
@@ -714,8 +712,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         currentText = text
         currentSource = source
         addHistory(text)
-        titleLabel.stringValue = text
-        metadataLabel.stringValue = source
         render(animated: true)
         placeWindowIfNeeded()
         window?.alphaValue = 0
@@ -756,7 +752,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         logoView.widthAnchor.constraint(equalToConstant: 24).isActive = true
         logoView.heightAnchor.constraint(equalToConstant: 24).isActive = true
 
-        titleLabel.font = .systemFont(ofSize: 18, weight: .regular)
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = NSColor(calibratedWhite: 0.95, alpha: 1)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
@@ -771,9 +767,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         topRow.addArrangedSubview(titleLabel)
         topRow.addArrangedSubview(NSView())
         topRow.addArrangedSubview(metadataLabel)
-
-        sectionLabel.font = .systemFont(ofSize: 12, weight: .regular)
-        sectionLabel.textColor = NSColor(calibratedWhite: 0.68, alpha: 1)
 
         cardContainer.wantsLayer = true
         cardContainer.layer?.backgroundColor = NSColor(calibratedWhite: 0.21, alpha: 1).cgColor
@@ -883,7 +876,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         footerRow.addArrangedSubview(footerPill)
 
         root.addArrangedSubview(topRow)
-        root.addArrangedSubview(sectionLabel)
         root.addArrangedSubview(cardContainer)
         root.addArrangedSubview(footerRow)
         content.addSubview(root)
@@ -1118,11 +1110,8 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
 
     private func render(animated: Bool = false) {
-        titleLabel.font = .systemFont(ofSize: 18, weight: .regular)
-        titleLabel.stringValue = currentText
-        let showsTranslation = isPrimarilyEnglish(currentText) || translatedText != nil
-        metadataLabel.stringValue = showsTranslation ? "English → Arabic" : currentSource
-        sectionLabel.stringValue = showsTranslation ? "Translate" : "Text"
+        updateHeader()
+        let showsTranslation = shouldShowTranslationChrome
         speakerButton.isHidden = !showsTranslation
         copyTranslationButton.title = showsTranslation ? "Copy Translation" : "Copy Text"
         let renderedText = renderedAttributedText()
@@ -1131,6 +1120,21 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         } else {
             textView.alphaValue = 1
             textView.textStorage?.setAttributedString(renderedText)
+        }
+    }
+
+    private var shouldShowTranslationChrome: Bool {
+        isPrimarilyEnglish(currentText) || translatedText != nil
+    }
+
+    private func updateHeader(status: String? = nil) {
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        if shouldShowTranslationChrome {
+            titleLabel.stringValue = "Translation"
+            metadataLabel.stringValue = status ?? "English → Arabic"
+        } else {
+            titleLabel.stringValue = currentSource
+            metadataLabel.stringValue = status ?? "\(currentText.count.formatted()) characters"
         }
     }
 
@@ -1239,7 +1243,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         measurementLayout.ensureLayout(for: measurementContainer)
         let measuredHeight = measurementLayout.usedRect(for: measurementContainer).height
         let textHeight = ceil(measuredHeight) + textView.textContainerInset.height * 2 + 20
-        let chromeHeight: CGFloat = 32 + 18 + 38 + 36
+        let chromeHeight: CGFloat = 32 + 8 + 38 + 28
         let compactHeight = max(window.minSize.height, textHeight + chromeHeight)
         let screenLimit = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
         let maximumAutomaticHeight = min(screenLimit * 0.68, 560)
@@ -1462,8 +1466,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             translationRequest?.cancel()
             translationGeneration = UUID()
             translatedText = nil
-            titleLabel.stringValue = currentText
-            metadataLabel.stringValue = currentSource
             render()
             resizeForContentIfNeeded()
         } else {
@@ -1484,8 +1486,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let chunks = translationChunks(from: translationInput)
         guard !chunks.isEmpty else { return }
 
-        metadataLabel.stringValue = "Translating to Arabic..."
-        render()
+        updateHeader(status: "Translating to Arabic...")
         translate(chunks: chunks, index: 0, translations: [], generation: generation)
     }
 
@@ -1599,15 +1600,13 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
     private func showCompletedTranslation(_ translations: [String]) {
         translatedText = translations.joined(separator: "\n\n")
-        titleLabel.stringValue = currentText
-        metadataLabel.stringValue = "English → Arabic"
         render()
         resizeForContentIfNeeded()
     }
 
     private func showTranslationFailure(generation: UUID) {
         guard generation == translationGeneration else { return }
-        metadataLabel.stringValue = "Translation unavailable"
+        updateHeader(status: "Translation unavailable")
     }
 
     @objc private func decreaseFontSize() {
