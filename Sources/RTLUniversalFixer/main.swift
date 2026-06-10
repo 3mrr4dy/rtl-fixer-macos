@@ -768,6 +768,47 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         topRow.addArrangedSubview(NSView())
         topRow.addArrangedSubview(metadataLabel)
 
+        copyTranslationButton.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "Copy") ?? NSImage()
+        copyTranslationButton.imageScaling = .scaleProportionallyDown
+        copyTranslationButton.imagePosition = .imageOnly
+        copyTranslationButton.isBordered = false
+        copyTranslationButton.target = self
+        copyTranslationButton.action = #selector(copyText)
+        copyTranslationButton.toolTip = "Copy text"
+        copyTranslationButton.setAccessibilityLabel("Copy text")
+        copyTranslationButton.contentTintColor = NSColor(calibratedWhite: 0.74, alpha: 1)
+        copyTranslationButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        copyTranslationButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+
+        footerMenuButton.image = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: "Actions") ?? NSImage()
+        footerMenuButton.imageScaling = .scaleProportionallyDown
+        footerMenuButton.imagePosition = .imageOnly
+        footerMenuButton.isBordered = false
+        footerMenuButton.target = self
+        footerMenuButton.action = #selector(showMoreMenu(_:))
+        footerMenuButton.toolTip = "Actions"
+        footerMenuButton.setAccessibilityLabel("Actions")
+        footerMenuButton.contentTintColor = NSColor(calibratedWhite: 0.74, alpha: 1)
+        footerMenuButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        footerMenuButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+
+        actionsButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") ?? NSImage()
+        actionsButton.imageScaling = .scaleProportionallyDown
+        actionsButton.imagePosition = .imageOnly
+        actionsButton.isBordered = false
+        actionsButton.target = self
+        actionsButton.action = #selector(closeWindow)
+        actionsButton.toolTip = "Close"
+        actionsButton.setAccessibilityLabel("Close")
+        actionsButton.contentTintColor = NSColor(calibratedWhite: 0.74, alpha: 1)
+        actionsButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        actionsButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+
+        topRow.addArrangedSubview(copyTranslationButton)
+        topRow.addArrangedSubview(speakerButton)
+        topRow.addArrangedSubview(footerMenuButton)
+        topRow.addArrangedSubview(actionsButton)
+
         cardContainer.wantsLayer = true
         cardContainer.layer?.backgroundColor = NSColor(calibratedWhite: 0.105, alpha: 1).cgColor
         cardContainer.layer?.cornerRadius = cardCornerRadius
@@ -778,15 +819,15 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         speakerImage.isTemplate = true
         speakerButton.image = speakerImage
         speakerButton.imageScaling = .scaleProportionallyDown
-        speakerButton.isBordered = true
-        speakerButton.bezelStyle = .rounded
-        speakerButton.controlSize = .regular
-        speakerButton.translatesAutoresizingMaskIntoConstraints = false
+        speakerButton.imagePosition = .imageOnly
+        speakerButton.isBordered = false
         speakerButton.target = self
         speakerButton.action = #selector(speakTranslation)
         speakerButton.toolTip = "Speak translation"
         speakerButton.setAccessibilityLabel("Speak translation")
-        speakerButton.contentTintColor = NSColor(calibratedWhite: 0.82, alpha: 1)
+        speakerButton.contentTintColor = NSColor(calibratedWhite: 0.74, alpha: 1)
+        speakerButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        speakerButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
         textView.isEditable = false
         textView.isSelectable = true
@@ -816,68 +857,9 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         cardContainer.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         cardContainer.addSubview(scroll)
-        cardContainer.addSubview(speakerButton)
-
-        let footer = NSStackView()
-        footer.orientation = .horizontal
-        footer.alignment = .centerY
-        footer.spacing = 12
-
-        footerMenuButton.image = NSImage(systemSymbolName: "line.3.horizontal", accessibilityDescription: "More") ?? NSImage()
-        footerMenuButton.imageScaling = .scaleProportionallyDown
-        footerMenuButton.isBordered = true
-        footerMenuButton.bezelStyle = .rounded
-        footerMenuButton.controlSize = .regular
-        footerMenuButton.target = self
-        footerMenuButton.action = #selector(showMoreMenu(_:))
-        footerMenuButton.toolTip = "More actions"
-        footerMenuButton.setAccessibilityLabel("More actions")
-        footerMenuButton.widthAnchor.constraint(equalToConstant: 42).isActive = true
-
-        let closeButton = NSButton(
-            image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") ?? NSImage(),
-            target: self,
-            action: #selector(closeWindow)
-        )
-        closeButton.imageScaling = .scaleProportionallyDown
-        closeButton.isBordered = true
-        closeButton.bezelStyle = .rounded
-        closeButton.controlSize = .regular
-        closeButton.toolTip = "Close"
-        closeButton.setAccessibilityLabel("Close")
-        closeButton.widthAnchor.constraint(equalToConstant: 42).isActive = true
-
-        copyTranslationButton.title = "Copy Translation"
-        copyTranslationButton.target = self
-        copyTranslationButton.action = #selector(copyText)
-        copyTranslationButton.isBordered = true
-        copyTranslationButton.bezelStyle = .rounded
-        copyTranslationButton.controlSize = .regular
-
-        actionsButton.title = "Actions"
-        actionsButton.target = self
-        actionsButton.action = #selector(showMoreMenu(_:))
-        actionsButton.isBordered = true
-        actionsButton.bezelStyle = .rounded
-        actionsButton.controlSize = .regular
-
-        let footerPill = NSStackView(views: [copyTranslationButton, actionsButton])
-        footerPill.orientation = .horizontal
-        footerPill.alignment = .centerY
-        footerPill.spacing = 8
-
-        let footerRow = NSStackView()
-        footerRow.orientation = .horizontal
-        footerRow.alignment = .centerY
-        footerRow.spacing = 12
-        footerRow.addArrangedSubview(footerMenuButton)
-        footerRow.addArrangedSubview(closeButton)
-        footerRow.addArrangedSubview(NSView())
-        footerRow.addArrangedSubview(footerPill)
 
         root.addArrangedSubview(topRow)
         root.addArrangedSubview(cardContainer)
-        root.addArrangedSubview(footerRow)
         content.addSubview(root)
 
         NSLayoutConstraint.activate([
@@ -887,13 +869,10 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             root.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
             topRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
             cardContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 130),
-            speakerButton.topAnchor.constraint(equalTo: cardContainer.topAnchor, constant: 14),
-            speakerButton.trailingAnchor.constraint(equalTo: cardContainer.trailingAnchor, constant: -14),
             scroll.leadingAnchor.constraint(equalTo: cardContainer.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: cardContainer.trailingAnchor),
             scroll.topAnchor.constraint(equalTo: cardContainer.topAnchor),
             scroll.bottomAnchor.constraint(equalTo: cardContainer.bottomAnchor),
-            footerRow.heightAnchor.constraint(equalToConstant: 38),
         ])
 
         metadataLabel.alignment = .right
@@ -1113,7 +1092,8 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         updateHeader()
         let showsTranslation = shouldShowTranslationChrome
         speakerButton.isHidden = !showsTranslation
-        copyTranslationButton.title = showsTranslation ? "Copy Translation" : "Copy Text"
+        copyTranslationButton.toolTip = showsTranslation ? "Copy translation" : "Copy text"
+        copyTranslationButton.setAccessibilityLabel(showsTranslation ? "Copy translation" : "Copy text")
         let renderedText = renderedAttributedText()
         if animated {
             crossfadeRenderedText(renderedText)
@@ -1243,7 +1223,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         measurementLayout.ensureLayout(for: measurementContainer)
         let measuredHeight = measurementLayout.usedRect(for: measurementContainer).height
         let textHeight = ceil(measuredHeight) + textView.textContainerInset.height * 2 + 20
-        let chromeHeight: CGFloat = 32 + 8 + 38 + 28
+        let chromeHeight: CGFloat = 32 + 8 + 28
         let compactHeight = max(window.minSize.height, textHeight + chromeHeight)
         let screenLimit = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
         let maximumAutomaticHeight = min(screenLimit * 0.68, 560)
