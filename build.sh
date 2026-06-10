@@ -17,6 +17,7 @@ swiftc \
   "$ROOT/Sources/RTLUniversalFixer/main.swift" \
   -o "$MACOS/RTL Fixer" \
   -framework AppKit \
+  -framework AVFoundation \
   -framework Carbon \
   -framework ApplicationServices \
   -framework NaturalLanguage \
@@ -70,4 +71,6 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 PLIST
 
 codesign --force --sign - "$OUT" >/dev/null
+rm -rf "/Applications/RTL Fixer.app"
+ditto "$OUT" "/Applications/RTL Fixer.app"
 echo "$OUT"

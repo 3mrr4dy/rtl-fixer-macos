@@ -658,9 +658,23 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private let windowCornerRadius: CGFloat = 18
     private let speechSynthesizer = AVSpeechSynthesizer()
 
+    private static func sanitizedFrame(_ frame: NSRect) -> NSRect {
+        guard let screen = NSScreen.main else {
+            return NSRect(x: 0, y: 0, width: 760, height: 520)
+        }
+        let visible = screen.visibleFrame
+        let width = min(max(frame.width, 700), min(visible.width - 48, 900))
+        let height = min(max(frame.height, 460), min(visible.height - 48, 680))
+        let x = min(max(frame.minX, visible.minX), visible.maxX - width)
+        let y = min(max(frame.minY, visible.minY), visible.maxY - height)
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+
     init() {
         let savedFrame = NSRectFromString(defaults.string(forKey: "viewerFrame") ?? "")
-        let initialFrame = savedFrame.isEmpty ? NSRect(x: 0, y: 0, width: 1260, height: 820) : savedFrame
+        let initialFrame = savedFrame.isEmpty
+            ? NSRect(x: 0, y: 0, width: 760, height: 520)
+            : Self.sanitizedFrame(savedFrame)
         let window = NSPanel(
             contentRect: initialFrame,
             styleMask: [.titled, .resizable, .fullSizeContentView, .nonactivatingPanel],
@@ -676,7 +690,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         window.hasShadow = true
         window.animationBehavior = .utilityWindow
         window.isMovableByWindowBackground = true
-        window.minSize = NSSize(width: 960, height: 600)
+        window.minSize = NSSize(width: 680, height: 420)
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isReleasedWhenClosed = false
@@ -874,6 +888,22 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         footerMenuButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
         footerMenuButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
 
+        let closeButton = NSButton(
+            image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") ?? NSImage(),
+            target: self,
+            action: #selector(closeWindow)
+        )
+        closeButton.imageScaling = .scaleProportionallyDown
+        closeButton.isBordered = false
+        closeButton.toolTip = "Close"
+        closeButton.setAccessibilityLabel("Close")
+        closeButton.contentTintColor = NSColor(calibratedWhite: 0.88, alpha: 1)
+        closeButton.wantsLayer = true
+        closeButton.layer?.backgroundColor = NSColor(calibratedWhite: 0.14, alpha: 1).cgColor
+        closeButton.layer?.cornerRadius = 22
+        closeButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        closeButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+
         copyTranslationButton.title = "Copy Translation"
         copyTranslationButton.target = self
         copyTranslationButton.action = #selector(copyText)
@@ -910,6 +940,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         footerRow.alignment = .centerY
         footerRow.spacing = 12
         footerRow.addArrangedSubview(footerMenuButton)
+        footerRow.addArrangedSubview(closeButton)
         footerRow.addArrangedSubview(NSView())
         footerRow.addArrangedSubview(footerPill)
 
@@ -1257,8 +1288,8 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         guard let window else { return }
         window.contentView?.layoutSubtreeIfNeeded()
 
-        let contentWidth = max(window.frame.width - 32, 960)
-        let cardWidth = max(720, contentWidth - 16)
+        let contentWidth = max(window.frame.width - 32, 680)
+        let cardWidth = max(600, contentWidth - 16)
         let columnWidth = max(260, floor((cardWidth - 28 - 24) / 2))
         let sourceHeight = measuredTextHeight(currentText, font: .systemFont(ofSize: max(22, fontSize + 9), weight: .semibold), width: columnWidth, alignment: .right)
         let translationHeight = measuredTextHeight(translatedText ?? "Translating...", font: .systemFont(ofSize: max(20, fontSize + 7), weight: .semibold), width: columnWidth, alignment: .left)
@@ -1268,7 +1299,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let chromeHeight: CGFloat = 42 + 15 + 20 + 12 + 54
         let totalHeight = cardHeight + chromeHeight + 32
         let screenLimit = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 1000
-        let maximumAutomaticHeight = min(screenLimit * 0.82, 880)
+        let maximumAutomaticHeight = min(screenLimit * 0.72, 680)
         let targetHeight = min(max(totalHeight, window.minSize.height), maximumAutomaticHeight)
 
         guard abs(window.frame.height - targetHeight) > 1 else { return }
@@ -1692,7 +1723,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private func saveFrame() {
         guard !isApplyingAutomaticSize else { return }
         if let frame = window?.frame {
-            defaults.set(NSStringFromRect(frame), forKey: "viewerFrame")
+            defaults.set(NSStringFromRect(Self.sanitizedFrame(frame)), forKey: "viewerFrame")
         }
     }
 }
