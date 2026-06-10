@@ -795,7 +795,9 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         speakerImage.isTemplate = true
         speakerButton.image = speakerImage
         speakerButton.imageScaling = .scaleProportionallyDown
-        speakerButton.isBordered = false
+        speakerButton.isBordered = true
+        speakerButton.bezelStyle = .rounded
+        speakerButton.controlSize = .regular
         speakerButton.translatesAutoresizingMaskIntoConstraints = false
         speakerButton.target = self
         speakerButton.action = #selector(speakTranslation)
@@ -876,17 +878,14 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
         footerMenuButton.image = NSImage(systemSymbolName: "line.3.horizontal", accessibilityDescription: "More") ?? NSImage()
         footerMenuButton.imageScaling = .scaleProportionallyDown
-        footerMenuButton.isBordered = false
+        footerMenuButton.isBordered = true
+        footerMenuButton.bezelStyle = .rounded
+        footerMenuButton.controlSize = .regular
         footerMenuButton.target = self
         footerMenuButton.action = #selector(showMoreMenu(_:))
         footerMenuButton.toolTip = "More actions"
         footerMenuButton.setAccessibilityLabel("More actions")
-        footerMenuButton.contentTintColor = NSColor(calibratedWhite: 0.88, alpha: 1)
-        footerMenuButton.wantsLayer = true
-        footerMenuButton.layer?.backgroundColor = NSColor(calibratedWhite: 0.14, alpha: 1).cgColor
-        footerMenuButton.layer?.cornerRadius = 22
-        footerMenuButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        footerMenuButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        footerMenuButton.widthAnchor.constraint(equalToConstant: 42).isActive = true
 
         let closeButton = NSButton(
             image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") ?? NSImage(),
@@ -894,46 +893,31 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             action: #selector(closeWindow)
         )
         closeButton.imageScaling = .scaleProportionallyDown
-        closeButton.isBordered = false
+        closeButton.isBordered = true
+        closeButton.bezelStyle = .rounded
+        closeButton.controlSize = .regular
         closeButton.toolTip = "Close"
         closeButton.setAccessibilityLabel("Close")
-        closeButton.contentTintColor = NSColor(calibratedWhite: 0.88, alpha: 1)
-        closeButton.wantsLayer = true
-        closeButton.layer?.backgroundColor = NSColor(calibratedWhite: 0.14, alpha: 1).cgColor
-        closeButton.layer?.cornerRadius = 22
-        closeButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        closeButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        closeButton.widthAnchor.constraint(equalToConstant: 42).isActive = true
 
         copyTranslationButton.title = "Copy Translation"
         copyTranslationButton.target = self
         copyTranslationButton.action = #selector(copyText)
-        copyTranslationButton.isBordered = false
-        copyTranslationButton.contentTintColor = NSColor(calibratedWhite: 0.95, alpha: 1)
-        copyTranslationButton.wantsLayer = true
-        copyTranslationButton.layer?.backgroundColor = NSColor(calibratedWhite: 0.13, alpha: 1).cgColor
-        copyTranslationButton.layer?.cornerRadius = 18
-        copyTranslationButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        copyTranslationButton.isBordered = true
+        copyTranslationButton.bezelStyle = .rounded
+        copyTranslationButton.controlSize = .regular
 
         actionsButton.title = "Actions"
         actionsButton.target = self
         actionsButton.action = #selector(showMoreMenu(_:))
-        actionsButton.isBordered = false
-        actionsButton.contentTintColor = NSColor(calibratedWhite: 0.9, alpha: 1)
-        actionsButton.wantsLayer = true
-        actionsButton.layer?.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 1).cgColor
-        actionsButton.layer?.cornerRadius = 18
-        actionsButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        actionsButton.isBordered = true
+        actionsButton.bezelStyle = .rounded
+        actionsButton.controlSize = .regular
 
         let footerPill = NSStackView(views: [copyTranslationButton, actionsButton])
         footerPill.orientation = .horizontal
         footerPill.alignment = .centerY
-        footerPill.spacing = 10
-        footerPill.edgeInsets = NSEdgeInsets(top: 6, left: 6, bottom: 6, right: 6)
-        footerPill.wantsLayer = true
-        footerPill.layer?.backgroundColor = NSColor(calibratedWhite: 0.11, alpha: 1).cgColor
-        footerPill.layer?.cornerRadius = 22
-        footerPill.layer?.borderWidth = 1
-        footerPill.layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        footerPill.spacing = 8
 
         let footerRow = NSStackView()
         footerRow.orientation = .horizontal
