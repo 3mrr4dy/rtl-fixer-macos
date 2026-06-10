@@ -769,10 +769,10 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         topRow.addArrangedSubview(metadataLabel)
 
         cardContainer.wantsLayer = true
-        cardContainer.layer?.backgroundColor = NSColor(calibratedWhite: 0.21, alpha: 1).cgColor
+        cardContainer.layer?.backgroundColor = NSColor(calibratedWhite: 0.105, alpha: 1).cgColor
         cardContainer.layer?.cornerRadius = cardCornerRadius
         cardContainer.layer?.borderWidth = 1
-        cardContainer.layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        cardContainer.layer?.borderColor = NSColor.white.withAlphaComponent(0.07).cgColor
 
         let speakerImage = NSImage(systemSymbolName: "speaker.wave.2", accessibilityDescription: "Speak translation") ?? NSImage()
         speakerImage.isTemplate = true
