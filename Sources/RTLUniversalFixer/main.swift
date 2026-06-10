@@ -609,20 +609,12 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private let titleLabel = NSTextField(labelWithString: "RTL Viewer")
     private let metadataLabel = NSTextField(labelWithString: "")
     private let sectionLabel = NSTextField(labelWithString: "Translate")
-    private let sourceCardLabel = NSTextField(labelWithString: "")
-    private let translationCardLabel = NSTextField(labelWithString: "")
-    private let sourceBadgeLabel = NSTextField(labelWithString: "Text")
-    private let targetBadgeLabel = NSTextField(labelWithString: "Arabic")
-    private let cardArrowLabel = NSTextField(labelWithString: "→")
     private let statusButton = NSButton()
     private let speakerButton = NSButton()
     private let footerMenuButton = NSButton()
     private let copyTranslationButton = NSButton()
     private let actionsButton = NSButton()
     private let cardContainer = NSView()
-    private let sourceColumn = NSStackView()
-    private let targetColumn = NSStackView()
-    private let cardBody = NSStackView()
     private let directionPopup = NSPopUpButton()
     private let stylePopup = NSPopUpButton()
     private let searchField = NSSearchField()
@@ -657,18 +649,18 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             defaults.set(Double(min(max(newValue, 13), 28)), forKey: "viewerFontSize")
         }
     }
-    private let contentInset: CGFloat = 16
-    private let cardCornerRadius: CGFloat = 22
+    private let contentInset: CGFloat = 12
+    private let cardCornerRadius: CGFloat = 16
     private let windowCornerRadius: CGFloat = 18
     private let speechSynthesizer = AVSpeechSynthesizer()
 
     private static func sanitizedFrame(_ frame: NSRect) -> NSRect {
         guard let screen = NSScreen.main else {
-            return NSRect(x: 0, y: 0, width: 760, height: 520)
+            return NSRect(x: 0, y: 0, width: 720, height: 360)
         }
         let visible = screen.visibleFrame
-        let width = min(max(frame.width, 700), min(visible.width - 48, 900))
-        let height = min(max(frame.height, 460), min(visible.height - 48, 680))
+        let width = min(max(frame.width, 620), min(visible.width - 48, 860))
+        let height = min(max(frame.height, 280), min(visible.height - 48, 560))
         let x = min(max(frame.minX, visible.minX), visible.maxX - width)
         let y = min(max(frame.minY, visible.minY), visible.maxY - height)
         return NSRect(x: x, y: y, width: width, height: height)
@@ -677,7 +669,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     init() {
         let savedFrame = NSRectFromString(defaults.string(forKey: "viewerFrame") ?? "")
         let initialFrame = savedFrame.isEmpty
-            ? NSRect(x: 0, y: 0, width: 760, height: 520)
+            ? NSRect(x: 0, y: 0, width: 720, height: 360)
             : Self.sanitizedFrame(savedFrame)
         let window = NSPanel(
             contentRect: initialFrame,
@@ -694,7 +686,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         window.hasShadow = true
         window.animationBehavior = .utilityWindow
         window.isMovableByWindowBackground = true
-        window.minSize = NSSize(width: 680, height: 420)
+        window.minSize = NSSize(width: 620, height: 280)
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isReleasedWhenClosed = false
@@ -724,8 +716,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         addHistory(text)
         titleLabel.stringValue = text
         metadataLabel.stringValue = source
-        sourceCardLabel.stringValue = text
-        translationCardLabel.stringValue = ""
         render(animated: true)
         placeWindowIfNeeded()
         window?.alphaValue = 0
@@ -751,14 +741,14 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
         let root = NSStackView()
         root.orientation = .vertical
-        root.spacing = 12
+        root.spacing = 8
         root.translatesAutoresizingMaskIntoConstraints = false
         root.edgeInsets = NSEdgeInsets(top: contentInset, left: contentInset, bottom: contentInset, right: contentInset)
 
         let topRow = NSStackView()
         topRow.orientation = .horizontal
         topRow.alignment = .centerY
-        topRow.spacing = 14
+        topRow.spacing = 10
 
         let logoView = NSImageView(image: NSImage(systemSymbolName: "translate", accessibilityDescription: "Translate") ?? NSImage())
         logoView.contentTintColor = NSColor(calibratedWhite: 0.75, alpha: 1)
@@ -766,13 +756,13 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         logoView.widthAnchor.constraint(equalToConstant: 24).isActive = true
         logoView.heightAnchor.constraint(equalToConstant: 24).isActive = true
 
-        titleLabel.font = .systemFont(ofSize: 29, weight: .regular)
+        titleLabel.font = .systemFont(ofSize: 18, weight: .regular)
         titleLabel.textColor = NSColor(calibratedWhite: 0.95, alpha: 1)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        metadataLabel.font = .systemFont(ofSize: 15, weight: .regular)
+        metadataLabel.font = .systemFont(ofSize: 12, weight: .regular)
         metadataLabel.textColor = NSColor(calibratedWhite: 0.58, alpha: 1)
         metadataLabel.alignment = .right
         metadataLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -782,7 +772,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         topRow.addArrangedSubview(NSView())
         topRow.addArrangedSubview(metadataLabel)
 
-        sectionLabel.font = .systemFont(ofSize: 15, weight: .regular)
+        sectionLabel.font = .systemFont(ofSize: 12, weight: .regular)
         sectionLabel.textColor = NSColor(calibratedWhite: 0.68, alpha: 1)
 
         cardContainer.wantsLayer = true
@@ -805,70 +795,34 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         speakerButton.setAccessibilityLabel("Speak translation")
         speakerButton.contentTintColor = NSColor(calibratedWhite: 0.82, alpha: 1)
 
-        sourceColumn.orientation = .vertical
-        sourceColumn.alignment = .centerX
-        sourceColumn.spacing = 20
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.backgroundColor = .clear
+        textView.textColor = NSColor(calibratedWhite: 0.93, alpha: 1)
+        textView.insertionPointColor = .systemTeal
+        textView.textContainerInset = NSSize(width: 22, height: 18)
+        textView.textContainer?.lineFragmentPadding = 2
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
 
-        sourceCardLabel.font = .systemFont(ofSize: 28, weight: .semibold)
-        sourceCardLabel.textColor = NSColor(calibratedWhite: 0.96, alpha: 1)
-        sourceCardLabel.alignment = .right
-        sourceCardLabel.maximumNumberOfLines = 4
-        sourceCardLabel.lineBreakMode = .byWordWrapping
+        let scroll = NSScrollView()
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.autohidesScrollers = true
+        scroll.documentView = textView
+        scroll.borderType = .noBorder
+        scroll.drawsBackground = false
+        cardContainer.setContentHuggingPriority(.defaultLow, for: .vertical)
 
-        sourceBadgeLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        sourceBadgeLabel.textColor = NSColor(calibratedWhite: 0.96, alpha: 1)
-        sourceBadgeLabel.alignment = .center
-        sourceBadgeLabel.wantsLayer = true
-        sourceBadgeLabel.layer?.backgroundColor = NSColor(calibratedWhite: 0.34, alpha: 1).cgColor
-        sourceBadgeLabel.layer?.cornerRadius = 10
-        sourceBadgeLabel.textColor = NSColor(calibratedWhite: 0.98, alpha: 1)
-        sourceBadgeLabel.drawsBackground = true
-        sourceBadgeLabel.backgroundColor = NSColor(calibratedWhite: 0.34, alpha: 1)
-        sourceBadgeLabel.isBezeled = false
-        sourceBadgeLabel.isEditable = false
-
-        sourceColumn.addArrangedSubview(sourceCardLabel)
-        sourceColumn.addArrangedSubview(sourceBadgeLabel)
-
-        targetColumn.orientation = .vertical
-        targetColumn.alignment = .centerX
-        targetColumn.spacing = 20
-
-        translationCardLabel.font = .systemFont(ofSize: 26, weight: .semibold)
-        translationCardLabel.textColor = NSColor(calibratedWhite: 0.98, alpha: 1)
-        translationCardLabel.alignment = .left
-        translationCardLabel.maximumNumberOfLines = 4
-        translationCardLabel.lineBreakMode = .byWordWrapping
-
-        targetBadgeLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        targetBadgeLabel.textColor = NSColor(calibratedWhite: 0.98, alpha: 1)
-        targetBadgeLabel.alignment = .center
-        targetBadgeLabel.wantsLayer = true
-        targetBadgeLabel.layer?.backgroundColor = NSColor(calibratedWhite: 0.34, alpha: 1).cgColor
-        targetBadgeLabel.layer?.cornerRadius = 10
-        targetBadgeLabel.drawsBackground = true
-        targetBadgeLabel.backgroundColor = NSColor(calibratedWhite: 0.34, alpha: 1)
-        targetBadgeLabel.isBezeled = false
-        targetBadgeLabel.isEditable = false
-
-        targetColumn.addArrangedSubview(translationCardLabel)
-        targetColumn.addArrangedSubview(targetBadgeLabel)
-
-        cardArrowLabel.font = .systemFont(ofSize: 28, weight: .regular)
-        cardArrowLabel.textColor = NSColor(calibratedWhite: 0.92, alpha: 1)
-        cardArrowLabel.alignment = .center
-        cardArrowLabel.setContentHuggingPriority(.required, for: .horizontal)
-
-        cardBody.orientation = .horizontal
-        cardBody.alignment = .centerY
-        cardBody.spacing = 24
-        cardBody.edgeInsets = NSEdgeInsets(top: 42, left: 36, bottom: 24, right: 36)
-        cardBody.translatesAutoresizingMaskIntoConstraints = false
-        cardBody.addArrangedSubview(sourceColumn)
-        cardBody.addArrangedSubview(cardArrowLabel)
-        cardBody.addArrangedSubview(targetColumn)
-
-        cardContainer.addSubview(cardBody)
+        cardContainer.addSubview(scroll)
         cardContainer.addSubview(speakerButton)
 
         let footer = NSStackView()
@@ -939,16 +893,15 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             root.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -8),
             root.topAnchor.constraint(equalTo: content.topAnchor, constant: 8),
             root.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
-            topRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 42),
-            cardContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 260),
+            topRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
+            cardContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 130),
             speakerButton.topAnchor.constraint(equalTo: cardContainer.topAnchor, constant: 14),
             speakerButton.trailingAnchor.constraint(equalTo: cardContainer.trailingAnchor, constant: -14),
-            cardBody.leadingAnchor.constraint(equalTo: cardContainer.leadingAnchor),
-            cardBody.trailingAnchor.constraint(equalTo: cardContainer.trailingAnchor),
-            cardBody.topAnchor.constraint(equalTo: cardContainer.topAnchor),
-            cardBody.bottomAnchor.constraint(equalTo: cardContainer.bottomAnchor),
-            footerRow.heightAnchor.constraint(equalToConstant: 54),
-            cardArrowLabel.widthAnchor.constraint(equalToConstant: 28),
+            scroll.leadingAnchor.constraint(equalTo: cardContainer.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: cardContainer.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: cardContainer.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: cardContainer.bottomAnchor),
+            footerRow.heightAnchor.constraint(equalToConstant: 38),
         ])
 
         metadataLabel.alignment = .right
@@ -1165,33 +1118,29 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
 
     private func render(animated: Bool = false) {
-        titleLabel.font = .systemFont(ofSize: max(24, fontSize + 11), weight: .regular)
-        sourceCardLabel.font = .systemFont(ofSize: max(22, fontSize + 9), weight: .semibold)
-        translationCardLabel.font = .systemFont(ofSize: max(20, fontSize + 7), weight: .semibold)
+        titleLabel.font = .systemFont(ofSize: 18, weight: .regular)
         titleLabel.stringValue = currentText
         let showsTranslation = isPrimarilyEnglish(currentText) || translatedText != nil
         metadataLabel.stringValue = showsTranslation ? "English → Arabic" : currentSource
         sectionLabel.stringValue = showsTranslation ? "Translate" : "Text"
-        sourceCardLabel.stringValue = currentText
-        sourceCardLabel.alignment = containsRTL(currentText) ? .right : .left
-        sourceBadgeLabel.stringValue = showsTranslation ? "English" : "Text"
-        targetBadgeLabel.stringValue = "Arabic"
-        translationCardLabel.stringValue = translatedText ?? (showsTranslation ? "Translating..." : "")
-        translationCardLabel.alignment = .right
-        targetColumn.isHidden = !showsTranslation
-        cardArrowLabel.isHidden = !showsTranslation
         speakerButton.isHidden = !showsTranslation
         copyTranslationButton.title = showsTranslation ? "Copy Translation" : "Copy Text"
+        let renderedText = renderedAttributedText()
         if animated {
-            crossfadeRenderedText(NSAttributedString())
+            crossfadeRenderedText(renderedText)
+        } else {
+            textView.alphaValue = 1
+            textView.textStorage?.setAttributedString(renderedText)
         }
     }
 
     private func crossfadeRenderedText(_ renderedText: NSAttributedString) {
+        textView.alphaValue = 0
+        textView.textStorage?.setAttributedString(renderedText)
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.16
+            context.duration = renderedText.length > 2_400 ? 0.0 : 0.16
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            window?.contentView?.animator().alphaValue = 1
+            textView.animator().alphaValue = 1
         }
     }
 
@@ -1260,44 +1209,43 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         return renderedBlock
     }
 
-    private func measuredTextHeight(_ text: String, font: NSFont, width: CGFloat, alignment: NSTextAlignment) -> CGFloat {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = alignment
-        paragraph.lineBreakMode = .byWordWrapping
-        let rect = (text as NSString).boundingRect(
-            with: NSSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [
-                .font: font,
-                .paragraphStyle: paragraph,
-            ],
-            context: nil
-        )
-        return ceil(rect.height)
-    }
-
     private func resizeForContentIfNeeded() {
-        guard let window else { return }
+        guard let window, let textStorage = textView.textStorage else { return }
         window.contentView?.layoutSubtreeIfNeeded()
-
-        let contentWidth = max(window.frame.width - 32, 680)
-        let cardWidth = max(600, contentWidth - 16)
-        let showsTranslation = isPrimarilyEnglish(currentText) || translatedText != nil
-        let columnWidth = showsTranslation
-            ? max(260, floor((cardWidth - 28 - 24) / 2))
-            : max(320, cardWidth - 72)
-        let sourceHeight = measuredTextHeight(currentText, font: .systemFont(ofSize: max(22, fontSize + 9), weight: .semibold), width: columnWidth, alignment: .right)
-        let translationHeight = showsTranslation
-            ? measuredTextHeight(translatedText ?? "Translating...", font: .systemFont(ofSize: max(20, fontSize + 7), weight: .semibold), width: columnWidth, alignment: .left)
-            : 0
-        let sourceBlockHeight = sourceHeight + 20 + 20
-        let targetBlockHeight = translationHeight + 20 + 20
-        let cardHeight = max(max(sourceBlockHeight, targetBlockHeight) + 66, 260)
-        let chromeHeight: CGFloat = 42 + 15 + 20 + 12 + 54
-        let totalHeight = cardHeight + chromeHeight + 32
-        let screenLimit = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 1000
-        let maximumAutomaticHeight = min(screenLimit * 0.72, 680)
-        let targetHeight = min(max(totalHeight, window.minSize.height), maximumAutomaticHeight)
+        textView.layoutSubtreeIfNeeded()
+        let contentWidth = window.contentView?.bounds.width ?? 0
+        let laidOutWidth: CGFloat
+        if textView.bounds.width > 400 {
+            laidOutWidth = textView.bounds.width
+        } else if contentWidth > 400 {
+            laidOutWidth = contentWidth
+        } else {
+            laidOutWidth = window.frame.width
+        }
+        let availableWidth = max(
+            320,
+            laidOutWidth - textView.textContainerInset.width * 2 - 8
+        )
+        let measurementStorage = NSTextStorage(attributedString: textStorage)
+        let measurementLayout = NSLayoutManager()
+        let measurementContainer = NSTextContainer(
+            containerSize: NSSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        )
+        measurementContainer.lineFragmentPadding = textView.textContainer?.lineFragmentPadding ?? 2
+        measurementContainer.widthTracksTextView = false
+        measurementContainer.heightTracksTextView = false
+        measurementLayout.addTextContainer(measurementContainer)
+        measurementStorage.addLayoutManager(measurementLayout)
+        measurementLayout.ensureLayout(for: measurementContainer)
+        let measuredHeight = measurementLayout.usedRect(for: measurementContainer).height
+        let textHeight = ceil(measuredHeight) + textView.textContainerInset.height * 2 + 20
+        let chromeHeight: CGFloat = 32 + 18 + 38 + 36
+        let compactHeight = max(window.minSize.height, textHeight + chromeHeight)
+        let screenLimit = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
+        let maximumAutomaticHeight = min(screenLimit * 0.68, 560)
+        let targetHeight = compactHeight <= maximumAutomaticHeight
+            ? compactHeight
+            : preferredWindowHeight
 
         guard abs(window.frame.height - targetHeight) > 1 else { return }
         var frame = window.frame
@@ -1315,9 +1263,27 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
 
     private func expandIfRenderedTextIsClipped(maximumHeight: CGFloat) {
-        guard let window else { return }
-        let targetHeight = min(window.frame.height, maximumHeight)
-        guard abs(window.frame.height - targetHeight) > 1 else { return }
+        guard let window,
+              let layoutManager = textView.layoutManager,
+              let textContainer = textView.textContainer,
+              let scrollView = textView.enclosingScrollView else { return }
+
+        window.contentView?.layoutSubtreeIfNeeded()
+        layoutManager.ensureLayout(for: textContainer)
+        let requiredHeight = ceil(layoutManager.usedRect(for: textContainer).height)
+            + textView.textContainerInset.height * 2
+            + 12
+        let visibleHeight = scrollView.contentView.bounds.height
+        let missingHeight = requiredHeight - visibleHeight
+        guard missingHeight > 2, window.frame.height + missingHeight <= maximumHeight else { return }
+
+        var frame = window.frame
+        let top = frame.maxY
+        frame.size.height += missingHeight
+        frame.origin.y = top - frame.height
+        isApplyingAutomaticSize = true
+        window.setFrame(frame, display: true)
+        isApplyingAutomaticSize = false
     }
 
     private func paragraphStyle(
@@ -1642,7 +1608,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private func showTranslationFailure(generation: UUID) {
         guard generation == translationGeneration else { return }
         metadataLabel.stringValue = "Translation unavailable"
-        translationCardLabel.stringValue = "Translation unavailable"
     }
 
     @objc private func decreaseFontSize() {
