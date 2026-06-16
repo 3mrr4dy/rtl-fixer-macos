@@ -697,6 +697,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private let textView = NSTextView()
     private let titleLabel = NSTextField(labelWithString: "RTL Viewer")
     private let metadataLabel = NSTextField(labelWithString: "")
+    private let translateButton = NSButton()
     private let speakerButton = NSButton()
     private let summarizeButton = NSButton()
     private let footerMenuButton = NSButton()
@@ -845,7 +846,6 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         DispatchQueue.main.async { [weak self] in
             self?.resizeForContentIfNeeded()
         }
-        translateAutomaticallyIfNeeded(text)
     }
 
     func showLastWindow() {
@@ -904,6 +904,18 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         copyTranslationButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
         copyTranslationButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
+        translateButton.image = NSImage(systemSymbolName: "character.book.closed", accessibilityDescription: "Translate") ?? NSImage()
+        translateButton.imageScaling = .scaleProportionallyDown
+        translateButton.imagePosition = .imageOnly
+        translateButton.isBordered = false
+        translateButton.target = self
+        translateButton.action = #selector(translateCurrentText)
+        translateButton.toolTip = "Translate to Arabic"
+        translateButton.setAccessibilityLabel("Translate to Arabic")
+        translateButton.contentTintColor = NSColor(calibratedWhite: 0.74, alpha: 1)
+        translateButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        translateButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+
         summarizeButton.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Summarize") ?? NSImage()
         summarizeButton.imageScaling = .scaleProportionallyDown
         summarizeButton.imagePosition = .imageOnly
@@ -941,6 +953,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         actionsButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
         topRow.addArrangedSubview(copyTranslationButton)
+        topRow.addArrangedSubview(translateButton)
         topRow.addArrangedSubview(summarizeButton)
         topRow.addArrangedSubview(speakerButton)
         topRow.addArrangedSubview(footerMenuButton)
@@ -1229,6 +1242,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         updateHeader()
         let showsTranslation = shouldShowTranslationChrome
         speakerButton.isHidden = !showsTranslation
+        translateButton.isHidden = !canTranslateCurrentText
         copyTranslationButton.toolTip = showsTranslation ? "Copy translation" : "Copy text"
         copyTranslationButton.setAccessibilityLabel(showsTranslation ? "Copy translation" : "Copy text")
         let renderedText = renderedAttributedText()
@@ -1241,7 +1255,11 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
 
     private var shouldShowTranslationChrome: Bool {
-        !isShowingSummary && (isPrimarilyEnglish(currentText) || translatedText != nil)
+        !isShowingSummary && translatedText != nil
+    }
+
+    private var canTranslateCurrentText: Bool {
+        !isShowingSummary && translatedText == nil && isPrimarilyEnglish(currentText)
     }
 
     private func updateHeader(status: String? = nil) {
@@ -1554,11 +1572,8 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         menu.addItem(menuItem("Copy with RTL Marks", action: #selector(copyWrappedText)))
         menu.addItem(.separator())
 
-        let autoTranslate = defaults.object(forKey: "autoTranslateEnglish") == nil
-            ? true
-            : defaults.bool(forKey: "autoTranslateEnglish")
-        let translationItem = menuItem("Translate English to Arabic", action: #selector(toggleAutomaticTranslation))
-        translationItem.state = autoTranslate ? .on : .off
+        let translationItem = menuItem("Translate to Arabic", action: #selector(translateCurrentText))
+        translationItem.isEnabled = canTranslateCurrentText
         menu.addItem(translationItem)
 
         menu.addItem(.separator())
@@ -1642,21 +1657,8 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         summaryArabicStyle = style
     }
 
-    @objc private func toggleAutomaticTranslation() {
-        let enabled = defaults.object(forKey: "autoTranslateEnglish") == nil
-            ? true
-            : defaults.bool(forKey: "autoTranslateEnglish")
-        defaults.set(!enabled, forKey: "autoTranslateEnglish")
-
-        if enabled {
-            translationRequest?.cancel()
-            translationGeneration = UUID()
-            translatedText = nil
-            render()
-            resizeForContentIfNeeded()
-        } else {
-            translateAutomaticallyIfNeeded(currentText)
-        }
+    @objc private func translateCurrentText() {
+        translateToArabicIfNeeded(currentText)
     }
 
     @objc private func summarizeCurrentText() {
@@ -1833,11 +1835,11 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         alert.runModal()
     }
 
-    private func translateAutomaticallyIfNeeded(_ text: String) {
-        let enabled = defaults.object(forKey: "autoTranslateEnglish") == nil
-            ? true
-            : defaults.bool(forKey: "autoTranslateEnglish")
-        guard enabled, isPrimarilyEnglish(text) else { return }
+    private func translateToArabicIfNeeded(_ text: String) {
+        guard canTranslateCurrentText, isPrimarilyEnglish(text) else {
+            NSSound.beep()
+            return
+        }
 
         let generation = translationGeneration
         let translationInput = makeBlocks(from: text)
