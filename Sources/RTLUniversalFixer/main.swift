@@ -1750,7 +1750,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let body: [String: Any] = [
             "model": selectedGroqModelId,
             "temperature": 0.2,
-            "max_tokens": 700,
+            "max_tokens": 1_200,
             "messages": [
                 [
                     "role": "system",
@@ -1777,7 +1777,10 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
                 : "اكتب بالعربية الفصحى الواضحة."
         }
         return """
-        Summarize the user text. \(languageInstruction) Be concise, accurate, and useful. Keep key decisions, facts, names, dates, tasks, and warnings. Use short bullets only when they improve scanning. Do not add information not present in the text.
+        Create a useful detailed summary, not a tiny recap. \(languageInstruction)
+        Preserve important context, names, decisions, constraints, errors, dates, numbers, action items, and warnings.
+        Use 4-8 bullets for normal text, more only if the source is long. Add a short "Next steps" section when tasks or fixes are mentioned.
+        Do not invent details. Do not compress important information into vague phrases.
         """
     }
 
