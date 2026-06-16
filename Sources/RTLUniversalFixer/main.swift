@@ -1749,8 +1749,8 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             : text
         let body: [String: Any] = [
             "model": selectedGroqModelId,
-            "temperature": 0.2,
-            "max_tokens": 1_200,
+            "temperature": 0.1,
+            "max_tokens": 2_000,
             "messages": [
                 [
                     "role": "system",
@@ -1777,10 +1777,12 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
                 : "اكتب بالعربية الفصحى الواضحة."
         }
         return """
-        Create a useful detailed summary, not a tiny recap. \(languageInstruction)
-        Preserve important context, names, decisions, constraints, errors, dates, numbers, action items, and warnings.
-        Use 4-8 bullets for normal text, more only if the source is long. Add a short "Next steps" section when tasks or fixes are mentioned.
-        Do not invent details. Do not compress important information into vague phrases.
+        Create a detailed condensed digest of the text. \(languageInstruction)
+        Keep every meaningful detail: context, names, examples, decisions, requirements, problems, errors, dates, numbers, options, tradeoffs, warnings, and action items.
+        Compress intelligently: remove filler, greetings, repetition, and wording noise, but do not drop useful facts.
+        Organize with clear sections when helpful: Summary, Key details, Decisions, Problems, Action items, Next steps.
+        If the source is short, keep it compact. If it is long or dense, make the digest longer so no important detail is lost.
+        Do not invent, generalize vaguely, or replace specifics with broad phrases.
         """
     }
 
