@@ -1750,7 +1750,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let body: [String: Any] = [
             "model": selectedGroqModelId,
             "temperature": 0.1,
-            "max_tokens": 2_000,
+            "max_tokens": 2_500,
             "messages": [
                 [
                     "role": "system",
@@ -1758,7 +1758,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
                 ],
                 [
                     "role": "user",
-                    "content": limitedText,
+                    "content": summaryUserPrompt(for: limitedText),
                 ],
             ],
         ]
@@ -1777,12 +1777,20 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
                 : "اكتب بالعربية الفصحى الواضحة."
         }
         return """
-        Create a detailed condensed digest of the text. \(languageInstruction)
-        Keep every meaningful detail: context, names, examples, decisions, requirements, problems, errors, dates, numbers, options, tradeoffs, warnings, and action items.
-        Compress intelligently: remove filler, greetings, repetition, and wording noise, but do not drop useful facts.
-        Organize with clear sections when helpful: Summary, Key details, Decisions, Problems, Action items, Next steps.
-        If the source is short, keep it compact. If it is long or dense, make the digest longer so no important detail is lost.
-        Do not invent, generalize vaguely, or replace specifics with broad phrases.
+        You are an adaptive information-compression editor. \(languageInstruction)
+        Do not use a fixed template. First infer what kind of text this is: chat, technical log, article, instructions, bug report, meeting notes, task list, or mixed content.
+        Choose the output shape that fits the source. Use a short paragraph for simple text, grouped bullets for dense details, numbered steps for procedures, and action lists only when there are real actions.
+        Preserve all meaningful facts, examples, names, numbers, errors, constraints, decisions, tradeoffs, and warnings. Remove only filler, greetings, duplicated wording, and noise.
+        Make the output length proportional to the source density. Dense important text should produce a detailed digest, not a tiny summary.
+        Do not invent facts. Do not replace specifics with broad vague statements. Do not add headings unless they genuinely help.
+        """
+    }
+
+    private func summaryUserPrompt(for text: String) -> String {
+        """
+        Condense this text intelligently while preserving the useful details. Adapt the structure to the content instead of forcing a template.
+
+        \(text)
         """
     }
 
