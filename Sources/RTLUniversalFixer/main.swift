@@ -3,6 +3,7 @@ import AVFoundation
 import Carbon.HIToolbox
 import NaturalLanguage
 import QuartzCore
+import Security
 import Vision
 
 private let hotkeySignature: OSType = 0x52544C46 // RTLF
@@ -24,6 +25,49 @@ enum ViewerStyle: Int {
     case large = 2
     case document = 3
 }
+
+enum SummaryLanguage: String, CaseIterable {
+    case arabic = "ar"
+    case english = "en"
+
+    var title: String {
+        switch self {
+        case .arabic: return "Arabic"
+        case .english: return "English"
+        }
+    }
+}
+
+enum SummaryArabicStyle: String, CaseIterable {
+    case egyptian = "egyptian"
+    case formal = "formal"
+
+    var title: String {
+        switch self {
+        case .egyptian: return "Egyptian Arabic"
+        case .formal: return "Modern Standard Arabic"
+        }
+    }
+}
+
+struct GroqModel: Equatable {
+    let id: String
+    let title: String
+    let note: String
+}
+
+private let groqModels: [GroqModel] = [
+    GroqModel(id: "meta-llama/llama-4-scout-17b-16e-instruct", title: "Llama 4 Scout 17B", note: "30K TPM, 500K TPD"),
+    GroqModel(id: "groq/compound", title: "Groq Compound", note: "70K TPM"),
+    GroqModel(id: "groq/compound-mini", title: "Groq Compound Mini", note: "70K TPM"),
+    GroqModel(id: "llama-3.3-70b-versatile", title: "Llama 3.3 70B Versatile", note: "Strong quality"),
+    GroqModel(id: "openai/gpt-oss-120b", title: "GPT OSS 120B", note: "Large open model"),
+    GroqModel(id: "qwen/qwen3-32b", title: "Qwen3 32B", note: "60 RPM"),
+]
+
+private let defaultGroqModelId = "meta-llama/llama-4-scout-17b-16e-instruct"
+private let keychainService = "com.local.rtl-fixer"
+private let groqAPIKeyAccount = "groq-api-key"
 
 private func eventHotKeyId(_ id: UInt32) -> EventHotKeyID {
     EventHotKeyID(signature: hotkeySignature, id: id)
@@ -89,6 +133,51 @@ private func looksLikeCode(_ line: String) -> Bool {
     }
     let symbols = trimmed.filter { "{}[]();=<>|/&*".contains($0) }.count
     return symbols >= 3 && !containsRTL(trimmed)
+}
+
+private func keychainPassword(account: String) -> String? {
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: keychainService,
+        kSecAttrAccount as String: account,
+        kSecReturnData as String: true,
+        kSecMatchLimit as String: kSecMatchLimitOne,
+    ]
+    var result: CFTypeRef?
+    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+          let data = result as? Data else { return nil }
+    return String(data: data, encoding: .utf8)
+}
+
+private func setKeychainPassword(_ password: String, account: String) -> Bool {
+    let data = Data(password.utf8)
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: keychainService,
+        kSecAttrAccount as String: account,
+    ]
+    let attributes: [String: Any] = [
+        kSecValueData as String: data,
+        kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+    ]
+
+    let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+    if status == errSecSuccess { return true }
+    guard status == errSecItemNotFound else { return false }
+
+    var addQuery = query
+    addQuery[kSecValueData as String] = data
+    addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+    return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+}
+
+private func deleteKeychainPassword(account: String) {
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: keychainService,
+        kSecAttrAccount as String: account,
+    ]
+    SecItemDelete(query as CFDictionary)
 }
 
 private func axAttribute(_ element: AXUIElement, _ attribute: CFString) -> CFTypeRef? {
@@ -609,6 +698,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private let titleLabel = NSTextField(labelWithString: "RTL Viewer")
     private let metadataLabel = NSTextField(labelWithString: "")
     private let speakerButton = NSButton()
+    private let summarizeButton = NSButton()
     private let footerMenuButton = NSButton()
     private let copyTranslationButton = NSButton()
     private let actionsButton = NSButton()
@@ -623,8 +713,11 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private var currentText = ""
     private var currentSource = "Text"
     private var translatedText: String?
+    private var isShowingSummary = false
     private var translationRequest: URLSessionDataTask?
     private var translationGeneration = UUID()
+    private var summaryRequest: URLSessionDataTask?
+    private var summaryGeneration = UUID()
     private var isApplyingAutomaticSize = false
     private var userIsLiveResizing = false
     private var preferredWindowHeight: CGFloat {
@@ -638,6 +731,34 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
     private var directionMode: DirectionMode = DirectionMode(rawValue: defaults.integer(forKey: "directionMode")) ?? .auto
     private var viewerStyle: ViewerStyle = ViewerStyle(rawValue: defaults.integer(forKey: "viewerStyle")) ?? .comfortable
+    private var selectedGroqModelId: String {
+        get {
+            let saved = defaults.string(forKey: "groqSummaryModel") ?? defaultGroqModelId
+            return groqModels.contains { $0.id == saved } ? saved : defaultGroqModelId
+        }
+        set {
+            defaults.set(newValue, forKey: "groqSummaryModel")
+        }
+    }
+    private var summaryLanguage: SummaryLanguage {
+        get {
+            SummaryLanguage(rawValue: defaults.string(forKey: "summaryLanguage") ?? "") ?? .arabic
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: "summaryLanguage")
+        }
+    }
+    private var summaryArabicStyle: SummaryArabicStyle {
+        get {
+            SummaryArabicStyle(rawValue: defaults.string(forKey: "summaryArabicStyle") ?? "") ?? .egyptian
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: "summaryArabicStyle")
+        }
+    }
+    private var selectedGroqModelTitle: String {
+        groqModels.first { $0.id == selectedGroqModelId }?.title ?? "Groq"
+    }
     private var fontSize: CGFloat {
         get {
             let saved = defaults.double(forKey: "viewerFontSize")
@@ -707,10 +828,13 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let text = normalizedForViewing(rawText)
         guard !text.isEmpty else { return }
         translationRequest?.cancel()
+        summaryRequest?.cancel()
         translationGeneration = UUID()
+        summaryGeneration = UUID()
         translatedText = nil
         currentText = text
         currentSource = source
+        isShowingSummary = false
         addHistory(text)
         render(animated: true)
         placeWindowIfNeeded()
@@ -780,6 +904,18 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         copyTranslationButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
         copyTranslationButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
+        summarizeButton.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Summarize") ?? NSImage()
+        summarizeButton.imageScaling = .scaleProportionallyDown
+        summarizeButton.imagePosition = .imageOnly
+        summarizeButton.isBordered = false
+        summarizeButton.target = self
+        summarizeButton.action = #selector(summarizeCurrentText)
+        summarizeButton.toolTip = "Summarize with Groq"
+        summarizeButton.setAccessibilityLabel("Summarize with Groq")
+        summarizeButton.contentTintColor = NSColor.systemTeal.withAlphaComponent(0.95)
+        summarizeButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        summarizeButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+
         footerMenuButton.image = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: "Actions") ?? NSImage()
         footerMenuButton.imageScaling = .scaleProportionallyDown
         footerMenuButton.imagePosition = .imageOnly
@@ -805,6 +941,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         actionsButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
         topRow.addArrangedSubview(copyTranslationButton)
+        topRow.addArrangedSubview(summarizeButton)
         topRow.addArrangedSubview(speakerButton)
         topRow.addArrangedSubview(footerMenuButton)
         topRow.addArrangedSubview(actionsButton)
@@ -1104,12 +1241,15 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
 
     private var shouldShowTranslationChrome: Bool {
-        isPrimarilyEnglish(currentText) || translatedText != nil
+        !isShowingSummary && (isPrimarilyEnglish(currentText) || translatedText != nil)
     }
 
     private func updateHeader(status: String? = nil) {
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        if shouldShowTranslationChrome {
+        if isShowingSummary {
+            titleLabel.stringValue = "AI Summary"
+            metadataLabel.stringValue = status ?? selectedGroqModelTitle
+        } else if shouldShowTranslationChrome {
             titleLabel.stringValue = "Translation"
             metadataLabel.stringValue = status ?? "English → Arabic"
         } else {
@@ -1422,6 +1562,46 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         menu.addItem(translationItem)
 
         menu.addItem(.separator())
+        menu.addItem(menuItem("Summarize with Groq", action: #selector(summarizeCurrentText)))
+        menu.addItem(menuItem("Set Groq API Key...", action: #selector(setGroqAPIKey)))
+        let clearKeyItem = menuItem("Clear Groq API Key", action: #selector(clearGroqAPIKey))
+        clearKeyItem.isEnabled = keychainPassword(account: groqAPIKeyAccount) != nil
+        menu.addItem(clearKeyItem)
+
+        let modelMenu = NSMenu()
+        for model in groqModels {
+            let item = menuItem("\(model.title)    \(model.note)", action: #selector(selectGroqModel(_:)))
+            item.representedObject = model.id
+            item.state = model.id == selectedGroqModelId ? .on : .off
+            modelMenu.addItem(item)
+        }
+        let modelItem = NSMenuItem(title: "Groq Model", action: nil, keyEquivalent: "")
+        modelItem.submenu = modelMenu
+        menu.addItem(modelItem)
+
+        let languageMenu = NSMenu()
+        for language in SummaryLanguage.allCases {
+            let item = menuItem(language.title, action: #selector(selectSummaryLanguage(_:)))
+            item.representedObject = language.rawValue
+            item.state = language == summaryLanguage ? .on : .off
+            languageMenu.addItem(item)
+        }
+        let languageItem = NSMenuItem(title: "Summary Language", action: nil, keyEquivalent: "")
+        languageItem.submenu = languageMenu
+        menu.addItem(languageItem)
+
+        let arabicStyleMenu = NSMenu()
+        for style in SummaryArabicStyle.allCases {
+            let item = menuItem(style.title, action: #selector(selectSummaryArabicStyle(_:)))
+            item.representedObject = style.rawValue
+            item.state = style == summaryArabicStyle ? .on : .off
+            arabicStyleMenu.addItem(item)
+        }
+        let arabicStyleItem = NSMenuItem(title: "Arabic Summary Style", action: nil, keyEquivalent: "")
+        arabicStyleItem.submenu = arabicStyleMenu
+        menu.addItem(arabicStyleItem)
+
+        menu.addItem(.separator())
         menu.addItem(menuItem("Close Window", action: #selector(closeWindow)))
         menu.popUp(positioning: nil, at: NSPoint(x: sender.bounds.minX, y: sender.bounds.minY - 4), in: sender)
     }
@@ -1434,6 +1614,32 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
     @objc private func refreshSelectedText() {
         (NSApp.delegate as? AppDelegate)?.showSelectedText()
+    }
+
+    @objc private func setGroqAPIKey() {
+        _ = promptForGroqAPIKey()
+    }
+
+    @objc private func clearGroqAPIKey() {
+        deleteKeychainPassword(account: groqAPIKeyAccount)
+    }
+
+    @objc private func selectGroqModel(_ sender: NSMenuItem) {
+        guard let modelId = sender.representedObject as? String,
+              groqModels.contains(where: { $0.id == modelId }) else { return }
+        selectedGroqModelId = modelId
+    }
+
+    @objc private func selectSummaryLanguage(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let language = SummaryLanguage(rawValue: rawValue) else { return }
+        summaryLanguage = language
+    }
+
+    @objc private func selectSummaryArabicStyle(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let style = SummaryArabicStyle(rawValue: rawValue) else { return }
+        summaryArabicStyle = style
     }
 
     @objc private func toggleAutomaticTranslation() {
@@ -1451,6 +1657,167 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         } else {
             translateAutomaticallyIfNeeded(currentText)
         }
+    }
+
+    @objc private func summarizeCurrentText() {
+        let sourceText = normalizedForViewing(translatedText ?? currentText)
+        guard !sourceText.isEmpty else {
+            NSSound.beep()
+            return
+        }
+
+        guard let apiKey = groqAPIKey() else { return }
+
+        summaryRequest?.cancel()
+        summaryGeneration = UUID()
+        let generation = summaryGeneration
+        updateHeader(status: "Summarizing...")
+
+        let request = groqSummaryRequest(apiKey: apiKey, text: sourceText)
+        summaryRequest = URLSession.shared.dataTask(with: request) { [weak self] responseData, response, requestError in
+            guard let self, generation == self.summaryGeneration else { return }
+
+            if let requestError = requestError as NSError?, requestError.code != NSURLErrorCancelled {
+                DispatchQueue.main.async {
+                    self.showSummaryFailure("Groq request failed.")
+                }
+                return
+            }
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  let responseData else {
+                DispatchQueue.main.async {
+                    self.showSummaryFailure("Groq returned no response.")
+                }
+                return
+            }
+
+            guard (200..<300).contains(httpResponse.statusCode),
+                  let summary = self.groqSummary(from: responseData) else {
+                let message = self.groqErrorMessage(from: responseData) ?? "Groq error \(httpResponse.statusCode)."
+                DispatchQueue.main.async {
+                    self.showSummaryFailure(message)
+                }
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.showSummary(summary)
+            }
+        }
+        summaryRequest?.resume()
+    }
+
+    private func groqAPIKey() -> String? {
+        if let saved = keychainPassword(account: groqAPIKeyAccount), !saved.isEmpty {
+            return saved
+        }
+        return promptForGroqAPIKey()
+    }
+
+    private func promptForGroqAPIKey() -> String? {
+        let alert = NSAlert()
+        alert.messageText = "Groq API Key"
+        alert.informativeText = "Paste your Groq API key. It will be stored in macOS Keychain."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+        field.placeholderString = "gsk_..."
+        alert.accessoryView = field
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+        guard setKeychainPassword(key, account: groqAPIKeyAccount) else {
+            showInlineAlert("Could not save Groq API key.")
+            return nil
+        }
+        return key
+    }
+
+    private func groqSummaryRequest(apiKey: String, text: String) -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.groq.com/openai/v1/chat/completions")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 45
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let textLimit = 18_000
+        let limitedText = text.count > textLimit
+            ? String(text.prefix(textLimit)) + "\n\n[Text truncated for summary.]"
+            : text
+        let body: [String: Any] = [
+            "model": selectedGroqModelId,
+            "temperature": 0.2,
+            "max_tokens": 700,
+            "messages": [
+                [
+                    "role": "system",
+                    "content": summarySystemPrompt(),
+                ],
+                [
+                    "role": "user",
+                    "content": limitedText,
+                ],
+            ],
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        return request
+    }
+
+    private func summarySystemPrompt() -> String {
+        let languageInstruction: String
+        switch summaryLanguage {
+        case .english:
+            languageInstruction = "Write in clear English."
+        case .arabic:
+            languageInstruction = summaryArabicStyle == .egyptian
+                ? "اكتب باللهجة المصرية الواضحة."
+                : "اكتب بالعربية الفصحى الواضحة."
+        }
+        return """
+        Summarize the user text. \(languageInstruction) Be concise, accurate, and useful. Keep key decisions, facts, names, dates, tasks, and warnings. Use short bullets only when they improve scanning. Do not add information not present in the text.
+        """
+    }
+
+    private func groqSummary(from responseData: Data) -> String? {
+        guard let response = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+              let choices = response["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let content = message["content"] as? String else { return nil }
+        let summary = normalizedForViewing(content)
+        return summary.isEmpty ? nil : summary
+    }
+
+    private func groqErrorMessage(from responseData: Data) -> String? {
+        guard let response = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+              let error = response["error"] as? [String: Any] else { return nil }
+        return error["message"] as? String
+    }
+
+    private func showSummary(_ summary: String) {
+        translationRequest?.cancel()
+        translatedText = nil
+        currentText = summary
+        currentSource = "AI Summary"
+        isShowingSummary = true
+        addHistory(summary)
+        render(animated: true)
+        resizeForContentIfNeeded()
+    }
+
+    private func showSummaryFailure(_ message: String) {
+        updateHeader(status: "Summary unavailable")
+        showInlineAlert(message)
+    }
+
+    private func showInlineAlert(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = "RTL Fixer"
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func translateAutomaticallyIfNeeded(_ text: String) {

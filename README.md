@@ -14,6 +14,9 @@ Its main mode copies selected text and shows it in a floating RTL viewer window.
 - Pin mode to keep the window above other apps.
 - Search inside the viewed text.
 - Copy plain text or copy text wrapped with RTL marks.
+- AI summarization through Groq Chat Completions.
+- Summary output options: Arabic, English, Egyptian Arabic, and Modern Standard Arabic.
+- Groq API key storage in macOS Keychain.
 - Clipboard fallback when selected text cannot be read.
 - History menu for the last 10 viewed snippets.
 - App icon and menu bar app behavior.
@@ -30,6 +33,8 @@ Its main mode copies selected text and shows it in a floating RTL viewer window.
 macOS will ask for Accessibility permission because the app reads selected text and the Accessibility tree of picked UI containers.
 macOS will ask for Screen Recording permission when using OCR region capture.
 
+AI summarization requires a Groq API key. Open the viewer, choose `Actions -> Set Groq API Key...`, then paste the key. The key is saved in macOS Keychain, not in the app preferences file.
+
 Enable it from:
 
 `System Settings -> Privacy & Security -> Accessibility -> RTL Fixer`
@@ -37,3 +42,14 @@ Enable it from:
 ## Limits
 
 Container picking works when the target app exposes its content through macOS Accessibility. While picking, move over an element, use the scroll wheel to choose a parent or child container, click to capture, or press Escape to cancel. Apps that hide their accessibility tree may still require OCR.
+
+## Groq Models
+
+The summary action includes a curated model list:
+
+- `meta-llama/llama-4-scout-17b-16e-instruct`
+- `groq/compound`
+- `groq/compound-mini`
+- `llama-3.3-70b-versatile`
+- `openai/gpt-oss-120b`
+- `qwen/qwen3-32b`
