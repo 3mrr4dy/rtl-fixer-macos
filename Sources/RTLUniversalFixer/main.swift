@@ -1883,6 +1883,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let languageInstruction = explanationLanguageInstruction(for: text)
         return """
         You explain what text is saying, not as a literal translation and not as a rigid summary. \(languageInstruction)
+        Output only the final explanation. Never reveal hidden reasoning, chain-of-thought, planning, analysis, or tags such as <think>, </think>, <analysis>, or </analysis>.
         First infer what kind of text this is: chat, technical log, article, instructions, bug report, meeting notes, task list, or mixed content.
         Explain the meaning, intent, important context, and what the reader should understand from it. If source-language terms are important, keep them only as inline terms.
         Preserve useful facts, examples, names, numbers, errors, constraints, decisions, tradeoffs, and warnings. Remove only filler, greetings, duplicated wording, and noise.
@@ -1912,7 +1913,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
     private func summaryUserPrompt(for text: String) -> String {
         """
-        Explain what this text is saying in a natural, useful way. Preserve the useful details and adapt the structure to the content.
+        Explain what this text is saying in a natural, useful way. Preserve the useful details and adapt the structure to the content. Return the final explanation only.
 
         \(text)
         """
@@ -1923,8 +1924,34 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
               let choices = response["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let content = message["content"] as? String else { return nil }
-        let summary = normalizedForViewing(content)
+        let summary = normalizedForViewing(contentWithoutReasoning(from: content))
         return summary.isEmpty ? nil : summary
+    }
+
+    private func contentWithoutReasoning(from content: String) -> String {
+        var cleaned = content
+        for tag in ["think", "analysis"] {
+            cleaned = removingTaggedSections(named: tag, from: cleaned)
+        }
+        return cleaned
+            .replacingOccurrences(of: #"</?(think|analysis)\b[^>]*>"#, with: "", options: [.regularExpression, .caseInsensitive])
+    }
+
+    private func removingTaggedSections(named tag: String, from content: String) -> String {
+        var cleaned = content
+        let openPattern = "<\(tag)"
+        let closePattern = "</\(tag)>"
+
+        while let openRange = cleaned.range(of: openPattern, options: [.caseInsensitive]) {
+            if let tagEnd = cleaned[openRange.lowerBound...].firstIndex(of: ">"),
+               let closeRange = cleaned[tagEnd...].range(of: closePattern, options: [.caseInsensitive]) {
+                cleaned.removeSubrange(openRange.lowerBound..<closeRange.upperBound)
+            } else {
+                cleaned.removeSubrange(openRange.lowerBound..<cleaned.endIndex)
+            }
+        }
+
+        return cleaned
     }
 
     private func groqErrorMessage(from responseData: Data) -> String? {
