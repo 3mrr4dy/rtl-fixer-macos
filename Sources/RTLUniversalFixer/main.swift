@@ -693,16 +693,76 @@ final class SelectionView: NSView {
     }
 }
 
+final class HoverIconButton: NSButton {
+    private var trackingAreaReference: NSTrackingArea?
+    private var isPointerInside = false {
+        didSet { updateBackground() }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    private func setup() {
+        isBordered = false
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.masksToBounds = true
+        updateBackground()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingAreaReference {
+            removeTrackingArea(trackingAreaReference)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .mouseEnteredAndExited, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        trackingAreaReference = trackingArea
+        addTrackingArea(trackingArea)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isPointerInside = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isPointerInside = false
+    }
+
+    override var isEnabled: Bool {
+        didSet { updateBackground() }
+    }
+
+    private func updateBackground() {
+        guard isEnabled, isPointerInside else {
+            layer?.backgroundColor = NSColor.clear.cgColor
+            return
+        }
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
+    }
+}
+
 final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSSearchFieldDelegate {
     private let textView = NSTextView()
     private let titleLabel = NSTextField(labelWithString: "RTL Viewer")
     private let metadataLabel = NSTextField(labelWithString: "")
-    private let translateButton = NSButton()
-    private let speakerButton = NSButton()
-    private let summarizeButton = NSButton()
-    private let footerMenuButton = NSButton()
-    private let copyTranslationButton = NSButton()
-    private let actionsButton = NSButton()
+    private let translateButton = HoverIconButton()
+    private let speakerButton = HoverIconButton()
+    private let summarizeButton = HoverIconButton()
+    private let footerMenuButton = HoverIconButton()
+    private let copyTranslationButton = HoverIconButton()
+    private let actionsButton = HoverIconButton()
     private let cardContainer = NSView()
     private let directionPopup = NSPopUpButton()
     private let stylePopup = NSPopUpButton()
@@ -713,6 +773,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private let fontSizeLabel = NSTextField(labelWithString: "")
     private var currentText = ""
     private var currentSource = "Text"
+    private var currentTextIsPrimarilyEnglish = false
     private var translatedText: String?
     private var isShowingSummary = false
     private var translationRequest: URLSessionDataTask?
@@ -779,11 +840,19 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             return NSRect(x: 0, y: 0, width: 720, height: 360)
         }
         let visible = screen.visibleFrame
-        let width = min(max(frame.width, 620), min(visible.width - 48, 860))
-        let height = min(max(frame.height, 280), min(visible.height - 48, 560))
+        let width = min(max(frame.width, 620), min(visible.width - 48, 1160))
+        let height = min(max(frame.height, 280), min(visible.height - 48, 760))
         let x = min(max(frame.minX, visible.minX), visible.maxX - width)
         let y = min(max(frame.minY, visible.minY), visible.maxY - height)
         return NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    private static func maximumWindowSize() -> NSSize {
+        guard let screen = NSScreen.main else {
+            return NSSize(width: 1160, height: 760)
+        }
+        let visible = screen.visibleFrame
+        return NSSize(width: min(visible.width - 48, 1160), height: min(visible.height - 48, 760))
     }
 
     init() {
@@ -807,6 +876,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         window.animationBehavior = .utilityWindow
         window.isMovableByWindowBackground = true
         window.minSize = NSSize(width: 620, height: 280)
+        window.maxSize = Self.maximumWindowSize()
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isReleasedWhenClosed = false
@@ -835,6 +905,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         translatedText = nil
         currentText = text
         currentSource = source
+        currentTextIsPrimarilyEnglish = isPrimarilyEnglish(text)
         isShowingSummary = false
         addHistory(text)
         render(animated: true)
@@ -916,14 +987,14 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         translateButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
         translateButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
-        summarizeButton.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Summarize") ?? NSImage()
+        summarizeButton.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Explain") ?? NSImage()
         summarizeButton.imageScaling = .scaleProportionallyDown
         summarizeButton.imagePosition = .imageOnly
         summarizeButton.isBordered = false
         summarizeButton.target = self
         summarizeButton.action = #selector(summarizeCurrentText)
-        summarizeButton.toolTip = "Summarize with Groq"
-        summarizeButton.setAccessibilityLabel("Summarize with Groq")
+        summarizeButton.toolTip = "Explain with AI"
+        summarizeButton.setAccessibilityLabel("Explain with AI")
         summarizeButton.contentTintColor = NSColor.systemTeal.withAlphaComponent(0.95)
         summarizeButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
         summarizeButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
@@ -1183,10 +1254,10 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             ]
         }
         applyInlinePattern(#"\*\*([^*\n]+)\*\*"#, to: attributed) { _ in
-            [.font: NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)]
+            [.font: NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold)]
         }
         applyInlinePattern(#"__([^_\n]+)__"#, to: attributed) { _ in
-            [.font: NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)]
+            [.font: NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold)]
         }
         applyInlinePattern(#"(?<!\*)\*([^*\n]+)\*(?!\*)"#, to: attributed) { _ in
             [.font: NSFontManager.shared.convert(baseFont, toHaveTrait: .italicFontMask)]
@@ -1259,13 +1330,13 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
 
     private var canTranslateCurrentText: Bool {
-        !isShowingSummary && translatedText == nil && isPrimarilyEnglish(currentText)
+        !isShowingSummary && translatedText == nil && currentTextIsPrimarilyEnglish
     }
 
     private func updateHeader(status: String? = nil) {
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         if isShowingSummary {
-            titleLabel.stringValue = "AI Summary"
+            titleLabel.stringValue = "AI Explanation"
             metadataLabel.stringValue = status ?? selectedGroqModelTitle
         } else if shouldShowTranslationChrome {
             titleLabel.stringValue = "Translation"
@@ -1333,6 +1404,10 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         fontOffset: CGFloat,
         tone: ContentTone
     ) -> NSAttributedString {
+        if block.isCode {
+            return renderedCollapsedCodeBlock(block, fontOffset: fontOffset)
+        }
+
         let displayText = cleanedMarkdownText(block.text, kind: block.kind)
         let direction = resolvedMode(for: displayText, isCode: block.isCode)
         let font = fontFor(block, offset: fontOffset)
@@ -1349,6 +1424,36 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             applyInlineMarkdown(to: renderedBlock, baseFont: font, codeFontSize: fontSize + fontOffset - 3)
         }
         return renderedBlock
+    }
+
+    private func renderedCollapsedCodeBlock(
+        _ block: TextBlock,
+        fontOffset: CGFloat
+    ) -> NSAttributedString {
+        let codeText = cleanedMarkdownText(block.text, kind: .code)
+        let lines = codeText
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+        let preview = lines
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty }
+            .map { String($0.prefix(76)) } ?? "code"
+        let lineLabel = lines.count == 1 ? "1 line" : "\(lines.count) lines"
+        let collapsedText = "Code collapsed • \(lineLabel) • \(preview)"
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .left
+        paragraph.baseWritingDirection = .leftToRight
+        paragraph.lineBreakMode = .byTruncatingTail
+        paragraph.paragraphSpacing = spacingAfter(block)
+        return NSAttributedString(
+            string: collapsedText,
+            attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: max(11, fontSize + fontOffset - 4), weight: .regular),
+                .paragraphStyle: paragraph,
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .backgroundColor: NSColor.controlBackgroundColor.withAlphaComponent(0.68),
+            ]
+        )
     }
 
     private func resizeForContentIfNeeded() {
@@ -1384,7 +1489,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         let chromeHeight: CGFloat = 32 + 8 + 28
         let compactHeight = max(window.minSize.height, textHeight + chromeHeight)
         let screenLimit = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
-        let maximumAutomaticHeight = min(screenLimit * 0.68, 560)
+        let maximumAutomaticHeight = min(screenLimit * 0.78, 720)
         let targetHeight = compactHeight <= maximumAutomaticHeight
             ? compactHeight
             : preferredWindowHeight
@@ -1455,7 +1560,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         case .code:
             return .monospacedSystemFont(ofSize: max(11, adjustedSize - 3), weight: .regular)
         case .heading:
-            return .systemFont(ofSize: adjustedSize + (viewerStyle == .large ? 5 : 3), weight: .semibold)
+            return .systemFont(ofSize: adjustedSize + (viewerStyle == .large ? 5 : 3), weight: .bold)
         case .quote:
             return .systemFont(ofSize: adjustedSize - 1, weight: .regular)
         case .bullet, .paragraph:
@@ -1571,13 +1676,17 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         menu.addItem(menuItem("Refresh Selected Text", action: #selector(refreshSelectedText)))
         menu.addItem(menuItem("Copy with RTL Marks", action: #selector(copyWrappedText)))
         menu.addItem(.separator())
+        menu.addItem(menuItem("Increase Text Size", action: #selector(increaseFontSize)))
+        menu.addItem(menuItem("Decrease Text Size", action: #selector(decreaseFontSize)))
+        menu.addItem(menuItem("Reset Text Size", action: #selector(resetFontSize)))
+        menu.addItem(.separator())
 
         let translationItem = menuItem("Translate to Arabic", action: #selector(translateCurrentText))
         translationItem.isEnabled = canTranslateCurrentText
         menu.addItem(translationItem)
 
         menu.addItem(.separator())
-        menu.addItem(menuItem("Summarize with Groq", action: #selector(summarizeCurrentText)))
+        menu.addItem(menuItem("Explain with AI", action: #selector(summarizeCurrentText)))
         menu.addItem(menuItem("Set Groq API Key...", action: #selector(setGroqAPIKey)))
         let clearKeyItem = menuItem("Clear Groq API Key", action: #selector(clearGroqAPIKey))
         clearKeyItem.isEnabled = keychainPassword(account: groqAPIKeyAccount) != nil
@@ -1779,18 +1888,18 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
                 : "اكتب بالعربية الفصحى الواضحة."
         }
         return """
-        You are an adaptive information-compression editor. \(languageInstruction)
-        Do not use a fixed template. First infer what kind of text this is: chat, technical log, article, instructions, bug report, meeting notes, task list, or mixed content.
-        Choose the output shape that fits the source. Use a short paragraph for simple text, grouped bullets for dense details, numbered steps for procedures, and action lists only when there are real actions.
-        Preserve all meaningful facts, examples, names, numbers, errors, constraints, decisions, tradeoffs, and warnings. Remove only filler, greetings, duplicated wording, and noise.
-        Make the output length proportional to the source density. Dense important text should produce a detailed digest, not a tiny summary.
-        Do not invent facts. Do not replace specifics with broad vague statements. Do not add headings unless they genuinely help.
+        You explain what text is saying, not as a literal translation and not as a rigid summary. \(languageInstruction)
+        First infer what kind of text this is: chat, technical log, article, instructions, bug report, meeting notes, task list, or mixed content.
+        Explain the meaning, intent, important context, and what the reader should understand from it. If the source language differs from the output language, translate the meaning naturally while explaining it.
+        Preserve useful facts, examples, names, numbers, errors, constraints, decisions, tradeoffs, and warnings. Remove only filler, greetings, duplicated wording, and noise.
+        Choose the shape that fits the source. Short paragraph for simple text, grouped bullets for dense details, numbered steps for procedures, and action lists only when there are real actions.
+        Do not invent facts. Do not use a fixed template. Do not replace specifics with broad vague statements.
         """
     }
 
     private func summaryUserPrompt(for text: String) -> String {
         """
-        Condense this text intelligently while preserving the useful details. Adapt the structure to the content instead of forcing a template.
+        Explain what this text is saying in a natural, useful way. Preserve the useful details and adapt the structure to the content.
 
         \(text)
         """
@@ -1815,7 +1924,8 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         translationRequest?.cancel()
         translatedText = nil
         currentText = summary
-        currentSource = "AI Summary"
+        currentSource = "AI Explanation"
+        currentTextIsPrimarilyEnglish = false
         isShowingSummary = true
         addHistory(summary)
         render(animated: true)
@@ -1836,7 +1946,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
 
     private func translateToArabicIfNeeded(_ text: String) {
-        guard canTranslateCurrentText, isPrimarilyEnglish(text) else {
+        guard canTranslateCurrentText else {
             NSSound.beep()
             return
         }
@@ -1980,6 +2090,13 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
     @objc private func increaseFontSize() {
         fontSize += 1
+        updateFontSizeLabel()
+        render()
+        resizeForContentIfNeeded()
+    }
+
+    @objc private func resetFontSize() {
+        fontSize = 18
         updateFontSizeLabel()
         render()
         resizeForContentIfNeeded()
