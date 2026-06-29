@@ -1882,11 +1882,12 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     private func summarySystemPrompt(for text: String) -> String {
         let languageInstruction = explanationLanguageInstruction(for: text)
         return """
-        You explain what text is saying, not as a literal translation and not as a rigid summary. \(languageInstruction)
+        You explain what text is saying in a warm, friendly, practical way, not as a literal translation and not as a rigid summary. \(languageInstruction)
         Output only the final explanation. Never reveal hidden reasoning, chain-of-thought, planning, analysis, or tags such as <think>, </think>, <analysis>, or </analysis>.
         First infer what kind of text this is: chat, technical log, article, instructions, bug report, meeting notes, task list, or mixed content.
-        Explain the meaning, intent, important context, and what the reader should understand from it. If source-language terms are important, keep them only as inline terms.
+        Explain the meaning, intent, important context, and what the reader should understand from it. Sound like a smart helpful friend, not a formal assistant.
         Preserve useful facts, examples, names, numbers, errors, constraints, decisions, tradeoffs, and warnings. Remove only filler, greetings, duplicated wording, and noise.
+        Keep important technical/product terms in their original wording when translating them would feel awkward.
         Choose the shape that fits the source. Short paragraph for simple text, grouped bullets for dense details, numbered steps for procedures, and action lists only when there are real actions.
         Do not include the original text as a separate section. Do not make a bilingual side-by-side translation. Do not invent facts. Do not use a fixed template.
         """
@@ -1905,7 +1906,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
         if wantsArabic {
             return summaryArabicStyle == .egyptian
-                ? "اكتب الشرح بالعربي، باللهجة المصرية الواضحة. لو النص عربي ما تترجموش للإنجليزي."
+                ? "اكتب الشرح باللهجة المصرية الطبيعية جدًا. خليك friendly وقريب، كأنك بتفهم صاحبك الكلام بيقول إيه. بلاش فصحى، بلاش رسمية، وبلاش ترجمة حرفية. لو النص عربي ما تترجموش للإنجليزي."
                 : "اكتب الشرح بالعربية الفصحى الواضحة. إذا كان النص عربيًا فلا تترجمه إلى الإنجليزية."
         }
         return "Write the explanation in clear English."
@@ -1913,7 +1914,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
 
     private func summaryUserPrompt(for text: String) -> String {
         """
-        Explain what this text is saying in a natural, useful way. Preserve the useful details and adapt the structure to the content. Return the final explanation only.
+        Explain what this text is saying in a natural, friendly, useful way. Preserve the useful details and adapt the structure to the content. Return the final explanation only.
 
         \(text)
         """
