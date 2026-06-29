@@ -16,7 +16,7 @@ Its main mode copies selected text and shows it in a floating RTL viewer window.
 - Copy plain text or copy text wrapped with RTL marks.
 - Adjustable viewer text size.
 - AI explanation through Groq Chat Completions.
-- AI output options: Arabic, English, Egyptian Arabic, and Modern Standard Arabic.
+- AI output options: Auto, Arabic, English, Egyptian Arabic, and Modern Standard Arabic.
 - Compact rendering for detected code blocks.
 - Groq API key storage in macOS Keychain.
 - Clipboard fallback when selected text cannot be read.

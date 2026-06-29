@@ -27,11 +27,13 @@ enum ViewerStyle: Int {
 }
 
 enum SummaryLanguage: String, CaseIterable {
+    case auto = "auto"
     case arabic = "ar"
     case english = "en"
 
     var title: String {
         switch self {
+        case .auto: return "Auto"
         case .arabic: return "Arabic"
         case .english: return "English"
         }
@@ -804,10 +806,10 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
     }
     private var summaryLanguage: SummaryLanguage {
         get {
-            SummaryLanguage(rawValue: defaults.string(forKey: "summaryLanguage") ?? "") ?? .arabic
+            SummaryLanguage(rawValue: defaults.string(forKey: "summaryLanguageV2") ?? "") ?? .auto
         }
         set {
-            defaults.set(newValue.rawValue, forKey: "summaryLanguage")
+            defaults.set(newValue.rawValue, forKey: "summaryLanguageV2")
         }
     }
     private var summaryArabicStyle: SummaryArabicStyle {
@@ -1710,7 +1712,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             item.state = language == summaryLanguage ? .on : .off
             languageMenu.addItem(item)
         }
-        let languageItem = NSMenuItem(title: "Summary Language", action: nil, keyEquivalent: "")
+        let languageItem = NSMenuItem(title: "AI Output Language", action: nil, keyEquivalent: "")
         languageItem.submenu = languageMenu
         menu.addItem(languageItem)
 
@@ -1865,7 +1867,7 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
             "messages": [
                 [
                     "role": "system",
-                    "content": summarySystemPrompt(),
+                    "content": summarySystemPrompt(for: limitedText),
                 ],
                 [
                     "role": "user",
@@ -1877,24 +1879,35 @@ final class RTLViewerWindowController: NSWindowController, NSWindowDelegate, NSS
         return request
     }
 
-    private func summarySystemPrompt() -> String {
-        let languageInstruction: String
-        switch summaryLanguage {
-        case .english:
-            languageInstruction = "Write in clear English."
-        case .arabic:
-            languageInstruction = summaryArabicStyle == .egyptian
-                ? "اكتب باللهجة المصرية الواضحة."
-                : "اكتب بالعربية الفصحى الواضحة."
-        }
+    private func summarySystemPrompt(for text: String) -> String {
+        let languageInstruction = explanationLanguageInstruction(for: text)
         return """
         You explain what text is saying, not as a literal translation and not as a rigid summary. \(languageInstruction)
         First infer what kind of text this is: chat, technical log, article, instructions, bug report, meeting notes, task list, or mixed content.
-        Explain the meaning, intent, important context, and what the reader should understand from it. If the source language differs from the output language, translate the meaning naturally while explaining it.
+        Explain the meaning, intent, important context, and what the reader should understand from it. If source-language terms are important, keep them only as inline terms.
         Preserve useful facts, examples, names, numbers, errors, constraints, decisions, tradeoffs, and warnings. Remove only filler, greetings, duplicated wording, and noise.
         Choose the shape that fits the source. Short paragraph for simple text, grouped bullets for dense details, numbered steps for procedures, and action lists only when there are real actions.
-        Do not invent facts. Do not use a fixed template. Do not replace specifics with broad vague statements.
+        Do not include the original text as a separate section. Do not make a bilingual side-by-side translation. Do not invent facts. Do not use a fixed template.
         """
+    }
+
+    private func explanationLanguageInstruction(for text: String) -> String {
+        let wantsArabic: Bool
+        switch summaryLanguage {
+        case .auto:
+            wantsArabic = containsRTL(text)
+        case .english:
+            wantsArabic = false
+        case .arabic:
+            wantsArabic = true
+        }
+
+        if wantsArabic {
+            return summaryArabicStyle == .egyptian
+                ? "اكتب الشرح بالعربي، باللهجة المصرية الواضحة. لو النص عربي ما تترجموش للإنجليزي."
+                : "اكتب الشرح بالعربية الفصحى الواضحة. إذا كان النص عربيًا فلا تترجمه إلى الإنجليزية."
+        }
+        return "Write the explanation in clear English."
     }
 
     private func summaryUserPrompt(for text: String) -> String {
